@@ -1,8 +1,29 @@
-# 前期PBL C5班
+# 前期　PBL
 
-# Quadruped Robot Project
+Arduino IDE を使用して開発する、
+段差昇降対応4足歩行ロボットプロジェクト。
 
-段差昇降可能な4足歩行ロボットの開発プロジェクト。
+赤外線センサを利用した PID 制御によって、
+壁距離制御・段差検知・姿勢補助を行う。
+
+---
+
+# Development Environment
+
+## IDE
+
+- Arduino IDE
+
+## Language
+
+- C++
+
+## Supported Boards
+
+- Arduino Uno
+- Arduino Mega
+- ESP32
+- ESP32-S3
 
 ---
 
@@ -10,15 +31,15 @@
 
 - 4足歩行
 - 段差昇降
-- 姿勢制御
-- 歩行パターン切替
-- IMUによるバランス補正
-- 距離センサによる段差検知
-- 拡張可能なモジュール構成
+- PID制御
+- 赤外線センサによる距離計測
+- IMUによる姿勢安定化
+- モジュール分割設計
+- クラスベース実装
 
 ---
 
-# Architecture
+# System Architecture
 
 ```txt
 Application
@@ -31,21 +52,20 @@ Application
 │   └── TrajectoryGenerator
 │
 ├── Sensors
-│   ├── IMU
-│   ├── DistanceSensor
+│   ├── IRSensor
+│   ├── IMUSensor
 │   └── FootSensor
-│
-├── Hardware
-│   ├── ServoDriver
-│   └── PWMDriver
 │
 ├── Control
 │   ├── PIDController
 │   └── BalanceController
 │
+├── Hardware
+│   ├── ServoDriver
+│   └── PWMDriver
+│
 └── System
     ├── StateMachine
-    ├── Config
     └── Logger
 ```
 
@@ -71,18 +91,11 @@ quadruped-robot/
 │   │   └── TrajectoryGenerator.cpp
 │   │
 │   ├── sensors/
+│   │   ├── IRSensor.h
+│   │   ├── IRSensor.cpp
 │   │   ├── IMUSensor.h
 │   │   ├── IMUSensor.cpp
-│   │   ├── DistanceSensor.h
-│   │   ├── DistanceSensor.cpp
-│   │   ├── FootSensor.h
-│   │   └── FootSensor.cpp
-│   │
-│   ├── hardware/
-│   │   ├── ServoDriver.h
-│   │   ├── ServoDriver.cpp
-│   │   ├── PWMDriver.h
-│   │   └── PWMDriver.cpp
+│   │   └── FootSensor.h
 │   │
 │   ├── control/
 │   │   ├── PIDController.h
@@ -90,10 +103,13 @@ quadruped-robot/
 │   │   ├── BalanceController.h
 │   │   └── BalanceController.cpp
 │   │
+│   ├── hardware/
+│   │   ├── ServoDriver.h
+│   │   ├── ServoDriver.cpp
+│   │   └── PWMDriver.h
+│   │
 │   ├── system/
 │   │   ├── StateMachine.h
-│   │   ├── StateMachine.cpp
-│   │   ├── Config.h
 │   │   └── Logger.h
 │   │
 │   └── utils/
@@ -103,235 +119,246 @@ quadruped-robot/
 │
 └── docs/
     ├── architecture.md
-    ├── gait-design.md
-    └── hardware.md
+    ├── pid-design.md
+    └── gait-design.md
 ```
 
 ---
 
-# Design Philosophy
+# PID Control Design
 
-## 1. Single Responsibility
-
-1クラスにつき1責務を基本とする。
-
-例：
-
-- センサ取得
-- サーボ制御
-- 歩行生成
-- 姿勢制御
-- 状態管理
-
-を分離する。
+赤外線センサを用いて、
+対象物との距離を一定に保つ PID 制御を実装する。
 
 ---
 
-## 2. Hardware Abstraction
+# PID Flow
 
-サーボ角度を直接扱わず、
-足先座標によって制御する。
-
-### Bad
-
-```cpp
-servo.write(120);
-```
-
-### Good
-
-```cpp
-leg.moveTo(x, y, z);
+```txt
+赤外線センサ
+    ↓
+距離測定
+    ↓
+PIDController
+    ↓
+補正量算出
+    ↓
+脚動作補正
 ```
 
 ---
 
-## 3. Update Loop Architecture
+# PID Formula
 
-Arduinoの `loop()` をゲームループ的に扱う。
+PID制御は以下の式を用いる。
+
+:contentReference[oaicite:0]{index=0}
+
+---
+
+# PID Parameters
+
+| Parameter | Description |
+|---|---|
+| Kp | 比例ゲイン |
+| Ki | 積分ゲイン |
+| Kd | 微分ゲイン |
+
+---
+
+# Example PID Controller
+
+## PIDController.h
 
 ```cpp
-void loop() {
-    robot.update();
+#pragma once
+
+class PIDController {
+public:
+    PIDController(float kp, float ki, float kd);
+
+    float compute(float target, float current);
+
+private:
+    float kp;
+    float ki;
+    float kd;
+
+    float integral;
+    float previousError;
+};
+```
+
+---
+
+## PIDController.cpp
+
+```cpp
+#include "PIDController.h"
+
+PIDController::PIDController(
+    float kp,
+    float ki,
+    float kd
+) {
+    this->kp = kp;
+    this->ki = ki;
+    this->kd = kd;
+
+    integral = 0;
+    previousError = 0;
+}
+
+float PIDController::compute(
+    float target,
+    float current
+) {
+    float error = target - current;
+
+    integral += error;
+
+    float derivative =
+        error - previousError;
+
+    previousError = error;
+
+    return
+        kp * error +
+        ki * integral +
+        kd * derivative;
 }
 ```
 
-内部では：
+---
 
-```cpp
-imu.update();
-balance.update();
-gait.update();
-```
+# Infrared Sensor Design
 
-のように各モジュールを更新する。
+赤外線距離センサで壁や段差との距離を測定する。
 
 ---
 
-# Main Components
+# Example IRSensor Class
 
----
-
-# RobotController
-
-全体制御を行う最上位クラス。
-
-## Responsibilities
-
-- 初期化
-- 状態管理
-- 各モジュール更新
-- 非常停止
-
-## Example
+## IRSensor.h
 
 ```cpp
-class RobotController {
+#pragma once
+
+class IRSensor {
 public:
-    void begin();
-    void update();
+    IRSensor(int pin);
+
+    int readRaw();
+    float readDistance();
 
 private:
-    GaitController gait;
-    BalanceController balance;
-    IMUSensor imu;
+    int pin;
 };
 ```
 
 ---
 
-# LegController
-
-1本の脚を制御する。
-
-## Responsibilities
-
-- 股関節制御
-- 膝制御
-- 脚先移動
-
-## Example
+## IRSensor.cpp
 
 ```cpp
-class LegController {
-public:
-    void moveTo(float x, float y, float z);
+#include <Arduino.h>
+#include "IRSensor.h"
 
-private:
-    ServoDriver hip;
-    ServoDriver thigh;
-    ServoDriver knee;
-};
+IRSensor::IRSensor(int pin) {
+    this->pin = pin;
+}
+
+int IRSensor::readRaw() {
+    return analogRead(pin);
+}
+
+float IRSensor::readDistance() {
+    int value = analogRead(pin);
+
+    return 4800.0 / (value - 20);
+}
 ```
 
 ---
 
-# GaitController
+# Example Usage
 
-歩行パターンを生成する。
-
-## Supported Gaits
-
-- Trot
-- Crawl
-- Bound
-- Climbing
-
-## Example
+## main.ino
 
 ```cpp
-class GaitController {
-public:
-    void update();
-};
+#include "sensors/IRSensor.h"
+#include "control/PIDController.h"
+
+IRSensor irSensor(A0);
+
+PIDController pid(
+    1.0,
+    0.01,
+    0.1
+);
+
+void setup() {
+    Serial.begin(115200);
+}
+
+void loop() {
+
+    float targetDistance = 20.0;
+
+    float currentDistance =
+        irSensor.readDistance();
+
+    float output =
+        pid.compute(
+            targetDistance,
+            currentDistance
+        );
+
+    Serial.print("Distance: ");
+    Serial.print(currentDistance);
+
+    Serial.print(" Output: ");
+    Serial.println(output);
+
+    delay(10);
+}
 ```
 
 ---
 
-# TrajectoryGenerator
+# Walking Control Concept
 
-脚先軌道を生成する。
-
-## Example
-
-```cpp
-Vector3 generateStepTrajectory(float phase);
-```
-
-## Trajectory Image
+PID出力を歩行制御へ反映する。
 
 ```txt
-      ／￣＼
-_____/      \_____
+PID Output
+    ↓
+歩幅補正
+    ↓
+脚位置補正
+    ↓
+姿勢安定化
 ```
 
 ---
 
-# IMUSensor
+# Recommended Sensor Placement
 
-姿勢角を取得する。
+```txt
+        Front
 
-## Responsibilities
+    [IR]      [IR]
 
-- Pitch取得
-- Roll取得
-- 姿勢更新
+        BODY
 
-## Example
+    [IR]      [IR]
 
-```cpp
-class IMUSensor {
-public:
-    void update();
-
-    float getPitch();
-    float getRoll();
-};
+         Rear
 ```
 
 ---
 
-# BalanceController
-
-姿勢安定化を行う。
-
-## Responsibilities
-
-- PID制御
-- 姿勢補正
-- 重心補正
-
-## Example
-
-```cpp
-class BalanceController {
-public:
-    void update(float pitch, float roll);
-};
-```
-
----
-
-# PIDController
-
-汎用PID制御クラス。
-
-## Example
-
-```cpp
-class PIDController {
-public:
-    float compute(float target, float current);
-};
-```
-
----
-
-# StateMachine
-
-ロボット状態管理。
-
-## Example
+# State Machine Design
 
 ```cpp
 enum class RobotState {
@@ -345,53 +372,27 @@ enum class RobotState {
 
 ---
 
-# Step Climbing Flow
-
-```txt
-DistanceSensor
-    ↓
-段差検知
-    ↓
-StateMachine
-    ↓
-Climbingモード
-    ↓
-Trajectory変更
-```
-
----
-
-# Future Extensions
-
-- Inverse Kinematics
-- SLAM
-- ROS2 Integration
-- Camera Recognition
-- Autonomous Navigation
-
----
-
 # Development Phases
 
 ## Phase 1
 
-サーボ単体動作
+赤外線センサ値取得
 
 ## Phase 2
 
-脚1本制御
+PID制御実装
 
 ## Phase 3
 
-4脚同期
+サーボ制御
 
 ## Phase 4
 
-IMU安定化
+脚1本制御
 
 ## Phase 5
 
-段差検知
+4脚同期
 
 ## Phase 6
 
@@ -399,17 +400,24 @@ IMU安定化
 
 ---
 
-# Main Loop Example
+# Design Philosophy
+
+## 1. Single Responsibility
+
+1クラス1責務。
+
+---
+
+## 2. Hardware Abstraction
+
+サーボ角度ではなく、
+足先座標で制御する。
+
+---
+
+## 3. Update Loop Architecture
 
 ```cpp
-#include "app/RobotController.h"
-
-RobotController robot;
-
-void setup() {
-    robot.begin();
-}
-
 void loop() {
     robot.update();
 }
@@ -417,24 +425,12 @@ void loop() {
 
 ---
 
-# Important Concept
+# Future Extensions
 
-このプロジェクトでは、
-
-```txt
-「サーボ角度」ではなく
-「足先座標」
-```
-
-で制御する。
-
-これにより：
-
-- 歩行生成
-- 段差昇降
-- バランス制御
-- 逆運動学
-
-を統一的に扱える。
+- Inverse Kinematics
+- ROS2 Integration
+- SLAM
+- Camera Recognition
+- Autonomous Navigation
 
 ---
