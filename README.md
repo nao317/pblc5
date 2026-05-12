@@ -88,39 +88,70 @@ quadruped-robot/
 │   │   ├── LegController.h
 │   │   ├── LegController.cpp
 │   │   ├── TrajectoryGenerator.h
-│   │   └── TrajectoryGenerator.cpp
+│   │   ├── TrajectoryGenerator.cpp
+│   │   ├── GaitParameters.h
+│   │   ├── LegTargets.h
+│   │   └── BodyPose.h
+│   │
+│   ├── kinematics/
+│   │   ├── InverseKinematics.h
+│   │   ├── InverseKinematics.cpp
+│   │   ├── ForwardKinematics.h
+│   │   └── ForwardKinematics.cpp
 │   │
 │   ├── sensors/
+│   │   ├── SensorData.h
 │   │   ├── IRSensor.h
 │   │   ├── IRSensor.cpp
 │   │   ├── IMUSensor.h
 │   │   ├── IMUSensor.cpp
-│   │   └── FootSensor.h
+│   │   ├── FootSensor.h
+│   │   └── FootSensor.cpp
 │   │
 │   ├── control/
 │   │   ├── PIDController.h
 │   │   ├── PIDController.cpp
 │   │   ├── BalanceController.h
-│   │   └── BalanceController.cpp
+│   │   ├── BalanceController.cpp
+│   │   ├── PostureController.h
+│   │   └── PostureController.cpp
 │   │
 │   ├── hardware/
 │   │   ├── ServoDriver.h
 │   │   ├── ServoDriver.cpp
-│   │   └── PWMDriver.h
+│   │   ├── PWMDriver.h
+│   │   ├── PWMDriver.cpp
+│   │   ├── ServoConfig.h
+│   │   └── PinConfig.h
 │   │
 │   ├── system/
 │   │   ├── StateMachine.h
-│   │   └── Logger.h
+│   │   ├── StateMachine.cpp
+│   │   ├── RobotState.h
+│   │   ├── Logger.h
+│   │   ├── Logger.cpp
+│   │   ├── TimeManager.h
+│   │   └── TimeManager.cpp
 │   │
-│   └── utils/
-│       ├── Vector3.h
-│       ├── MathUtils.h
-│       └── Constants.h
+│   ├── utils/
+│   │   ├── Vector2.h
+│   │   ├── Vector3.h
+│   │   ├── MathUtils.h
+│   │   ├── LowPassFilter.h
+│   │   ├── Constants.h
+│   │   └── Types.h
+│   │
+│   └── config/
+│       ├── RobotConfig.h
+│       ├── GaitConfig.h
+│       └── PIDConfig.h
 │
 └── docs/
     ├── architecture.md
+    ├── gait-design.md
     ├── pid-design.md
-    └── gait-design.md
+    ├── kinematics.md
+    └── state-machine.md
 ```
 
 ---
